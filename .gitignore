@@ -33,6 +33,10 @@ word_vectors_*.png
 # Jupyter
 .ipynb_checkpoints/
 
+# Assignment PDF and report template
+IFT6289_A_H26_A1.pdf
+IFT6289_Assignment_Template/
+
 # LaTeX build artifacts
 *.aux
 *.log
