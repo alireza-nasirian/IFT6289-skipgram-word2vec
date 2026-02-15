@@ -44,9 +44,20 @@ def naive_softmax_loss_and_gradient(
     ### This numerically stable implementation helps you avoid issues pertaining
     ### to integer overflow.
 
-    # loss
+    # Compute scores and softmax probabilities: y_hat = softmax(U @ v_i)
+    scores = output_vectors @ input_vector                  # (vocab_size,)
+    y_hat = softmax(scores)                                 # (vocab_size,)
 
-    # grad_input_vec, grad_output_vecs
+    # Cross-entropy loss: L = -log(y_hat_o)
+    loss = -np.log(y_hat[output_word_idx])
+
+    # Gradient w.r.t. input vector: dL/dv_i = U^T (y_hat - y)
+    delta = y_hat.copy()
+    delta[output_word_idx] -= 1                             # (y_hat - y)
+    grad_input_vec = output_vectors.T @ delta               # (dim,)
+
+    # Gradient w.r.t. all output vectors: dL/dU = (y_hat - y) v_i^T
+    grad_output_vecs = np.outer(delta, input_vector)        # (vocab_size, dim)
 
     ### END YOUR CODE
 
@@ -80,6 +91,28 @@ def neg_sampling_loss_and_gradient(
 
     ### YOUR CODE HERE (~10 Lines)
     ### Please use your implementation of sigmoid in here.
+
+    # Retrieve the true output vector and negative sample vectors
+    u_o = output_vectors[output_word_idx]                       # (dim,)
+    u_neg = output_vectors[neg_sample_word_indices]              # (K, dim)
+
+    # Compute sigmoid scores
+    pos_score = sigmoid(u_o @ input_vector)                     # scalar
+    neg_scores = sigmoid(-u_neg @ input_vector)                 # (K,)
+
+    # Loss: -log(sigma(u_o^T v_i)) - sum_k log(sigma(-u_k^T v_i))
+    loss = -np.log(pos_score) - np.sum(np.log(neg_scores))
+
+    # Gradient w.r.t. input vector v_i
+    grad_input_vec = -(1 - pos_score) * u_o + ((1 - neg_scores) @ u_neg)   # (dim,)
+
+    # Gradient w.r.t. all output vectors (sparse: only o and negative indices)
+    grad_output_vecs = np.zeros(output_vectors.shape)
+    grad_output_vecs[output_word_idx] = -(1 - pos_score) * input_vector
+
+    # Accumulate gradients for negative samples (handles duplicates via np.add.at)
+    np.add.at(grad_output_vecs, neg_sample_word_indices,
+              np.outer(1 - neg_scores, input_vector))
 
     ### END YOUR CODE
 
@@ -122,6 +155,20 @@ def skipgram(current_input_word, window_size, output_words, word2_ind,
     grad_output_vecs = np.zeros(output_vectors.shape)
 
     ### YOUR CODE HERE (~8 Lines)
+
+    # Look up the center (input) word index and its embedding vector
+    center_word_idx = word2_ind[current_input_word]
+    v_i = input_vectors[center_word_idx]                        # (dim,)
+
+    # Sum loss and gradients over each context (output) word in the window
+    for output_word in output_words:
+        output_word_idx = word2_ind[output_word]
+        l, g_in, g_out = word2vec_loss_and_gradient(
+            v_i, output_word_idx, output_vectors, dataset
+        )
+        loss += l
+        grad_input_vecs[center_word_idx] += g_in
+        grad_output_vecs += g_out
 
     ### END YOUR CODE
 
